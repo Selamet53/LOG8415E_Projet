@@ -46,8 +46,8 @@ class EC2Manager:
     def launch_instances(self, security_group_id):
         self.instances_micro = self.ec2.create_instances(
             ImageId='ami-0e86e20dae9224db8',
-            MinCount=1,
-            MaxCount=1,
+            MinCount=3,
+            MaxCount=3,
             InstanceType='t3.micro',
             SecurityGroupIds= [security_group_id],
             KeyName='my_key_pair',

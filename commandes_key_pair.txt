@@ -1,0 +1,12 @@
+# Pour restreindre
+icacls "C:\Users\selam\Desktop\LOG8415E\projet\my_key_pair.pem" /inheritance:r /grant:r "selam:R" /deny "*S-1-5-32-545:F"
+icacls "C:\Users\selam\Desktop\LOG8415E\projet\my_key_pair.pem" /remove "BUILTIN\Users" 
+
+# Pour réinitialiser
+icacls "C:\Users\selam\Desktop\LOG8415E\projet\my_key_pair.pem" /reset
+
+# Pour se connecter en ssh
+ssh -i my_key_pair.pem ubuntu@54.164.82.6 
+
+# Afficher les logs
+cat /var/log/cloud-init-output.log

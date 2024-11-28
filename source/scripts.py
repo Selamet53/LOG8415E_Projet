@@ -1,11 +1,25 @@
 # project
 mysql = '''#!/bin/bash
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt install -y mysql-server sysbench
+sudo apt install -y mysql-server sysbench unzip
+
+cd /home/ubuntu
+
+# Setup MySQL
+MYSQL_PASSWORD="root"
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH 'mysql_native_password' BY '$ROOT_PASSWORD';"
+
+# Setup sakila db
+wget https://downloads.mysql.com/docs/sakila-db.zip
+unzip sakila-db.zip -d
+
+#mysql -u root -p # + entre root psw
+#SOURCE ~/sakila-db/sakila-schema.sql;
+#SOURCE ~/sakila-db/sakila-data.sql;
 
 # Running sysbench
-sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="USER"--mysql-password="PASSWORD" prepare
-sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="USER"--mysql-password="PASSWORD" run
+# sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="USER"--mysql-password="PASSWORD" prepare
+# sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="USER"--mysql-password="PASSWORD" run
 '''
 gatekeeper = '''#!/bin/bash
 sudo apt-get update && sudo apt-get upgrade -y
