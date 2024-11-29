@@ -1,7 +1,5 @@
 import boto3
 import os
-import paramiko
-import time
 from scripts import mysql, gatekeeper
 
 class EC2Manager:
@@ -13,7 +11,6 @@ class EC2Manager:
         self.key_pair_name = 'my_key_pair'
         self.userData_Gatekeeper = gatekeeper
         self.userData_SQL = mysql
-        self.ssh = paramiko.SSHClient()
 
     def create_key_pair(self):
         try:
