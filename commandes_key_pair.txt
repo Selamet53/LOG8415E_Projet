@@ -10,3 +10,6 @@ ssh -i my_key_pair.pem ubuntu@54.164.82.6
 
 # Afficher les logs
 cat /var/log/cloud-init-output.log
+
+ps aux | grep uvicorn
+cat /home/ubuntu/uvicorn.log
