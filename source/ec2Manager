@@ -18,6 +18,7 @@ class EC2Manager:
         self.userData_SQL = mysql
         self.gatekeeper_sg_id = ''
         self.trustedHost_sg_id = ''
+        self.trustedHost_ip = ''
 
     def create_key_pair(self):
         try:
@@ -54,22 +55,24 @@ class EC2Manager:
             Description='Security group for Gatekeeper instance',
             VpcId=self.vpc_id
         )
-        security_group_id = response.group_id
-
+        self.gatekeeper_sg_id = response.group_id
+        print(f"Created Security Group: {self.gatekeeper_sg_id} for the gatekeeper")
+    
+    def alter_gatekeeper_security_group(self):
         self.ec2_client.authorize_security_group_ingress(
-            GroupId=security_group_id,
+            GroupId=self.gatekeeper_sg_id,
             IpPermissions=[
                 {
                     'IpProtocol': 'tcp',
                     'FromPort': 443,  # HTTPS traffic for outside
                     'ToPort': 443,
-                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
                 },
                 {
                     'IpProtocol': 'tcp',
                     'FromPort': 8000,  # Port for trusted host
                     'ToPort': 8000,
-                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
                 },
                 { # Reminder : For ssh -> remove?
                     'IpProtocol': 'tcp',
@@ -79,13 +82,10 @@ class EC2Manager:
                 }
             ]
         )
-
-        print(f"Created Security Group: {security_group_id} for the gatekeeper")
-        return security_group_id
     
     def launch_gatekeeper(self):
-        self.gatekeeper_sg_id = self.create_security_group_gatekeeper()
-
+        self.alter_gatekeeper_security_group()
+        self.userData_Gatekeeper = self.userData_Gatekeeper.replace("TRUSTED_HOST_URL", self.trustedHost_ip)
         self.gatekeeper = self.ec2.create_instances(
             ImageId='ami-0e86e20dae9224db8',
             MinCount=1,
@@ -110,10 +110,10 @@ class EC2Manager:
             Description='Security group for Trusted host instance',
             VpcId=self.vpc_id
         )
-        security_group_id = response.group_id
+        self.trustedHost_sg_id = response.group_id
 
         self.ec2_client.authorize_security_group_ingress(
-            GroupId=security_group_id,
+            GroupId=self.trustedHost_sg_id,
             IpPermissions=[
                 { # Only communicate with gatekeeper
                     'IpProtocol': 'tcp',
@@ -136,18 +136,17 @@ class EC2Manager:
             ]
         )
 
-        print(f"Created Security Group: {security_group_id} for the trusted host")
-        return security_group_id
+        print(f"Created Security Group: {self.trustedHost_sg_id} for the trusted host")
     
     def launch_trusted_host(self):
-        security_group_id = self.create_security_group_trusted_host()
+        self.create_security_group_trusted_host()
 
         self.trustedHost = self.ec2.create_instances(
             ImageId='ami-0e86e20dae9224db8',
             MinCount=1,
             MaxCount=1,
             InstanceType='t2.large',
-            SecurityGroupIds= [security_group_id],
+            SecurityGroupIds= [self.trustedHost_sg_id],
             KeyName='my_key_pair',
             UserData = self.userData_TrustedHost,
             TagSpecifications=[
@@ -157,11 +156,19 @@ class EC2Manager:
                 }
             ]
         )
+
+        for instance in self.trustedHost:
+            instance.wait_until_running()
+            instance.reload()
+
+        self.trustedHost_ip = self.trustedHost[0].public_ip_address
+        print(f"Trusted Host IP: {self.trustedHost_ip} AFTER RUNNING")
     
     # Launching the instances
     def launch_instances(self):
-        self.launch_gatekeeper()
+        self.create_security_group_gatekeeper()
         self.launch_trusted_host()
+        self.launch_gatekeeper()
         # self.launch_proxy()
         # self.launch_cluster()
 
