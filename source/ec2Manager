@@ -18,7 +18,13 @@ class EC2Manager:
         self.userData_SQL = mysql
         self.gatekeeper_sg_id = ''
         self.trustedHost_sg_id = ''
+        self.proxy_sg_id = ''
+        self.cluster_sg_id = ''
         self.trustedHost_ip = ''
+        self.proxy_ip = ''
+        self.manager_ip = ''
+        self.worker1_ip = ''
+        self.worker2_ip = ''
 
     def create_key_pair(self):
         try:
@@ -111,21 +117,25 @@ class EC2Manager:
             VpcId=self.vpc_id
         )
         self.trustedHost_sg_id = response.group_id
+        print(f"Created Security Group: {self.trustedHost_sg_id} for the trusted host")
 
+    def alter_trusted_host_security_group(self):
         self.ec2_client.authorize_security_group_ingress(
             GroupId=self.trustedHost_sg_id,
             IpPermissions=[
-                { # Only communicate with gatekeeper
+                {
                     'IpProtocol': 'tcp',
-                    'FromPort': 8000,
-                    'ToPort': 8000,
-                    'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id}]
-                },
-                { # Only communicate with gatekeeper
-                    'IpProtocol': 'tcp',
-                    'FromPort': 443,
+                    'FromPort': 443,  # HTTPS for gatekepper and proxy
                     'ToPort': 443,
-                    'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id}]
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id}]
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 8000,  # Port for gatekepper and proxy
+                    'ToPort': 8000,
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id}]
                 },
                 { # Reminder : For ssh -> remove?
                     'IpProtocol': 'tcp',
@@ -134,13 +144,11 @@ class EC2Manager:
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
                 }
             ]
-        )
-
-        print(f"Created Security Group: {self.trustedHost_sg_id} for the trusted host")
+        ) 
     
     def launch_trusted_host(self):
-        self.create_security_group_trusted_host()
-
+        self.alter_trusted_host_security_group()
+        self.userData_TrustedHost = self.userData_TrustedHost.replace("PROXY_URL", self.proxy_ip)
         self.trustedHost = self.ec2.create_instances(
             ImageId='ami-0e86e20dae9224db8',
             MinCount=1,
@@ -163,16 +171,80 @@ class EC2Manager:
 
         self.trustedHost_ip = self.trustedHost[0].public_ip_address
         print(f"Trusted Host IP: {self.trustedHost_ip} AFTER RUNNING")
+
+    # Proxy Setup
+    def create_security_group_proxy(self):
+        response = self.ec2.create_security_group(
+            GroupName='proxy-security-group',
+            Description='Security group for proxy instance',
+            VpcId=self.vpc_id
+        )
+        self.proxy_sg_id = response.group_id
+        print(f"Created Security Group: {self.proxy_sg_id} for the proxy")
+    
+    def alter_proxy_security_group(self):
+        self.ec2_client.authorize_security_group_ingress(
+            GroupId=self.proxy_sg_id,
+            IpPermissions=[
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 443,  # HTTPS for gatekepper and proxy
+                    'ToPort': 443,
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                },
+                { # Port open for trusted host
+                    'IpProtocol': 'tcp',
+                    'FromPort': 8000,
+                    'ToPort': 8000,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                },
+                { # Reminder : For ssh -> remove?
+                    'IpProtocol': 'tcp',
+                    'FromPort': 22,
+                    'ToPort': 22,
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                }
+            ]
+        )
+
+    def launch_proxy(self):
+        self.alter_proxy_security_group()
+        self.proxy = self.ec2.create_instances(
+            ImageId='ami-0e86e20dae9224db8',
+            MinCount=1,
+            MaxCount=1,
+            InstanceType='t2.large',
+            SecurityGroupIds= [self.proxy_sg_id],
+            KeyName='my_key_pair',
+            UserData = self.userData_Proxy,
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [{'Key': 'Name', 'Value': 'Proxy'}]
+                }
+            ]
+        )
+
+        for instance in self.proxy:
+            instance.wait_until_running()
+            instance.reload()
+
+        self.proxy_ip = self.proxy[0].public_ip_address
+        print(f"Proxy IP: {self.proxy_ip} AFTER RUNNING")
+
     
     # Launching the instances
     def launch_instances(self):
         self.create_security_group_gatekeeper()
+        self.create_security_group_trusted_host()
+        self.create_security_group_proxy()
+        self.launch_proxy()
         self.launch_trusted_host()
         self.launch_gatekeeper()
-        # self.launch_proxy()
+
         # self.launch_cluster()
 
-        instances = self.gatekeeper + self.trustedHost + self.proxy + self.instances_micro
+        instances = self.gatekeeper
         for instance in instances:
             instance.wait_until_running()
 
