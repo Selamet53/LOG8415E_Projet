@@ -70,13 +70,13 @@ class EC2Manager:
             IpPermissions=[
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 443,  # HTTPS traffic for outside
+                    'FromPort': 443,  # HTTPS traffic for all
                     'ToPort': 443,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
                 },
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 8000,  # Port for trusted host
+                    'FromPort': 8000,  # Port open for all
                     'ToPort': 8000,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
                 },
@@ -128,14 +128,14 @@ class EC2Manager:
                     'FromPort': 443,  # HTTPS for gatekepper and proxy
                     'ToPort': 443,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
-                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id}]
+                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id,}, {'GroupId': self.proxy_sg_id}]
                 },
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 8000,  # Port for gatekepper and proxy
+                    'FromPort': 8000,  # Port open for Gatekeeper and proxy
                     'ToPort': 8000,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
-                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id, }]
+                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id,}, {'GroupId': self.proxy_sg_id}]
                 },
                 { # Reminder : For ssh -> remove?
                     'IpProtocol': 'tcp',
@@ -188,15 +188,17 @@ class EC2Manager:
             IpPermissions=[
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 443,  # HTTPS for gatekepper and proxy
+                    'FromPort': 443,  # HTTPS for trusted host and Cluster
                     'ToPort': 443,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                    #'UserIdGroupPairs': [{'GroupId': self.trustedHost_sg_id,}, {'GroupId': self.cluster_sg_id}]
                 },
                 {
                     'IpProtocol': 'tcp',
                     'FromPort': 8000, # Port open for trusted host and Cluster
                     'ToPort': 8000,
                     'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                    #'UserIdGroupPairs': [{'GroupId': self.trustedHost_sg_id,}, {'GroupId': self.cluster_sg_id}]
                 },
                 { # Reminder : For ssh -> remove?
                     'IpProtocol': 'tcp',
@@ -249,15 +251,17 @@ class EC2Manager:
             IpPermissions=[
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 443,  # HTTPS for the proxy
+                    'FromPort': 443,  # HTTPS port for the proxy
                     'ToPort': 443,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                    #'UserIdGroupPairs': [{'GroupId': self.proxy_sg_id}]
                 },
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 8000,
+                    'FromPort': 8000, # Port open for proxy
                     'ToPort': 8000,
                     'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                    #'UserIdGroupPairs': [{'GroupId': self.proxy_sg_id}]
                 },
                 { # Reminder : For ssh -> remove?
                     'IpProtocol': 'tcp',
@@ -289,9 +293,13 @@ class EC2Manager:
         self.manager_ip = self.instances_micro[0].public_ip_address
         self.worker1_ip = self.instances_micro[1].public_ip_address
         self.worker2_ip = self.instances_micro[2].public_ip_address
+        print(f"Cluster Manager IP: {self.manager_ip} AFTER RUNNING")
+        print(f"Cluster Worker1 IP: {self.worker1_ip} AFTER RUNNING")
+        print(f"Cluster Worker2 IP: {self.worker2_ip} AFTER RUNNING")
     
     # Launching the instances
     def launch_instances(self):
+        # Creating the security groups first for dependency reasons
         self.create_security_group_gatekeeper()
         self.create_security_group_trusted_host()
         self.create_security_group_proxy()
@@ -325,7 +333,7 @@ class EC2Manager:
 
         response = self.ec2_client.describe_security_groups(
             Filters=[{'Name': 'group-name', 
-                      'Values': ['my-security-group', 'gatekeeper-security-group', 'trusted-host-security-group', 'proxy-security-group']}]
+                      'Values': ['cluster-security-group', 'gatekeeper-security-group', 'trusted-host-security-group', 'proxy-security-group']}]
         )
 
         if response['SecurityGroups']:

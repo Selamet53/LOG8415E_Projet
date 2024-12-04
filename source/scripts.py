@@ -1,24 +1,24 @@
-# project
+# project: the fast api code is mostly from the first lab assignment but modified for this project's needs.
 mysql = '''#!/bin/bash
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt install -y mysql-server sysbench unzip python3 python3-pip python3-venv
 
-# # Go to ~/
-# cd /home/ubuntu
+# Go to ~/
+cd /home/ubuntu
 
-# # Setup MySQL
-# MYSQL_PASSWORD="root"
-# sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH 'mysql_native_password' BY '$MYSQL_PASSWORD';"
+# Setup MySQL
+MYSQL_PASSWORD="root"
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH 'mysql_native_password' BY '$MYSQL_PASSWORD';"
 
-# # Setup sakila db
-# wget https://downloads.mysql.com/docs/sakila-db.zip
-# unzip sakila-db.zip
+# Setup sakila db
+wget https://downloads.mysql.com/docs/sakila-db.zip
+unzip sakila-db.zip
 
-# mysql -u root -p"$MYSQL_PASSWORD" -e "SOURCE ./sakila-db/sakila-schema.sql ; SOURCE ./sakila-db/sakila-data.sql ;"
+mysql -u root -p"$MYSQL_PASSWORD" -e "SOURCE ./sakila-db/sakila-schema.sql ; SOURCE ./sakila-db/sakila-data.sql ;"
 
-# # Running sysbench
-# sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="root" --mysql-password="$MYSQL_PASSWORD" prepare
-# sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="root" --mysql-password="$MYSQL_PASSWORD" run
+# Running sysbench
+sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="root" --mysql-password="$MYSQL_PASSWORD" prepare
+sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user="root" --mysql-password="$MYSQL_PASSWORD" run
 
 
 # Listening to requests

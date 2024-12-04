@@ -2,7 +2,7 @@ import asyncio
 import aiohttp
 
 async def call_endpoint_http(session, i):
-    url = "http://54.83.75.214:8000/"
+    url = "http://54.88.113.8:8000/"
     headers = {'content-type': 'application/json'}
     try:
         print(f"Sending request {i} to {url}")
