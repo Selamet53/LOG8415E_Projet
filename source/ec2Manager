@@ -7,10 +7,10 @@ class EC2Manager:
         self.ec2 = boto3.resource('ec2', region_name='us-east-1')
         self.ec2_client = boto3.client('ec2', region_name='us-east-1')
         self.vpc_id = ''
-        self.instances_micro = []
         self.gatekeeper = []
         self.trustedHost = []
         self.proxy = []
+        self.instances_micro = []
         self.key_pair_name = 'my_key_pair'
         self.userData_Gatekeeper = gatekeeper
         self.userData_TrustedHost = trusted_host
@@ -135,7 +135,7 @@ class EC2Manager:
                     'FromPort': 8000,  # Port for gatekepper and proxy
                     'ToPort': 8000,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
-                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id}]
+                    #'UserIdGroupPairs': [{'GroupId': self.gatekeeper_sg_id, }]
                 },
                 { # Reminder : For ssh -> remove?
                     'IpProtocol': 'tcp',
@@ -192,9 +192,9 @@ class EC2Manager:
                     'ToPort': 443,
                     'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
                 },
-                { # Port open for trusted host
+                {
                     'IpProtocol': 'tcp',
-                    'FromPort': 8000,
+                    'FromPort': 8000, # Port open for trusted host and Cluster
                     'ToPort': 8000,
                     'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
                 },
@@ -209,6 +209,9 @@ class EC2Manager:
 
     def launch_proxy(self):
         self.alter_proxy_security_group()
+        self.userData_Proxy = self.userData_Proxy.replace("MANAGER_URL", self.manager_ip)
+        # self.userData_Proxy = self.userData_Proxy.replace("WORKER1_URL", self.worker1_ip)
+        # self.userData_Proxy = self.userData_Proxy.replace("WORKER2_URL", self.worker2_ip)
         self.proxy = self.ec2.create_instances(
             ImageId='ami-0e86e20dae9224db8',
             MinCount=1,
@@ -232,21 +235,76 @@ class EC2Manager:
         self.proxy_ip = self.proxy[0].public_ip_address
         print(f"Proxy IP: {self.proxy_ip} AFTER RUNNING")
 
+    # Cluster Setup
+    def create_security_group_cluster(self):
+        response = self.ec2.create_security_group(
+            GroupName='cluster-security-group',
+            Description='Security group for Mysql instances',
+            VpcId=self.vpc_id
+        )
+        self.cluster_sg_id = response.group_id
+
+        self.ec2_client.authorize_security_group_ingress(
+            GroupId=self.cluster_sg_id,
+            IpPermissions=[
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 443,  # HTTPS for the proxy
+                    'ToPort': 443,
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 8000,
+                    'ToPort': 8000,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                },
+                { # Reminder : For ssh -> remove?
+                    'IpProtocol': 'tcp',
+                    'FromPort': 22,
+                    'ToPort': 22,
+                    'IpRanges': [{'CidrIp': "0.0.0.0/0"}]
+                }
+            ]
+        )
+
+        print(f"Created Security Group: {self.cluster_sg_id} for the cluster nodes")
+        return self.cluster_sg_id
+
+    def launch_cluster(self):
+        self.instances_micro = self.ec2.create_instances(
+            ImageId='ami-0e86e20dae9224db8',
+            MinCount=3,
+            MaxCount=3,
+            InstanceType='t3.micro',
+            SecurityGroupIds= [self.cluster_sg_id],
+            KeyName='my_key_pair',
+            UserData = self.userData_SQL
+        )
+
+        for instance in self.instances_micro:
+            instance.wait_until_running()
+            instance.reload()
+
+        self.manager_ip = self.instances_micro[0].public_ip_address
+        self.worker1_ip = self.instances_micro[1].public_ip_address
+        self.worker2_ip = self.instances_micro[2].public_ip_address
     
     # Launching the instances
     def launch_instances(self):
         self.create_security_group_gatekeeper()
         self.create_security_group_trusted_host()
         self.create_security_group_proxy()
+        self.create_security_group_cluster()
+        self.launch_cluster()
         self.launch_proxy()
         self.launch_trusted_host()
         self.launch_gatekeeper()
 
-        # self.launch_cluster()
-
         instances = self.gatekeeper
         for instance in instances:
             instance.wait_until_running()
+            instance.reload()
 
     # Terminating all resources from AWS
     def cleanup_resources(self):
